@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: authcheck-server
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ADMIN_KEY
+        sync: false
+      - key: BING_IMAGE_SEARCH_KEY
+        sync: false
+      - key: GOOGLE_CSE_KEY
+        sync: false
+      - key: GOOGLE_CSE_CX
+        sync: false
+    disk:
+      name: authcheck-data
+      mountPath: /opt/render/project/src/data
+      sizeGB: 1
