@@ -10,6 +10,8 @@ import {
 } from '../analysisPrompt.js';
 import { findReferenceImages } from '../services/referenceStore.js';
 import { fetchLiveReferenceImages } from '../services/liveImageSearch.js';
+import { requireUser } from '../services/authMiddleware.js';
+import { checkUsageAllowance, recordScan } from '../services/usageTracking.js';
 
 const router = express.Router();
 
@@ -23,13 +25,24 @@ const upload = multer({
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const MODEL = 'claude-sonnet-5';
 
-router.post('/analyze', upload.single('image'), async (req, res) => {
+router.post('/analyze', requireUser, upload.single('image'), async (req, res) => {
   try {
     const { link } = req.body;
     const image = req.file;
 
     if (!image && !link) {
       return res.status(400).json({ error: 'Provide an image, a link, or both.' });
+    }
+
+    // Check quota BEFORE spending any money on the AI call. Paying plans
+    // are never blocked (see usageTracking.checkUsageAllowance) — only
+    // the free plan can be stopped once its included quota runs out.
+    const allowance = checkUsageAllowance(req.user);
+    if (!allowance.allowed) {
+      return res.status(402).json({
+        error: allowance.reason,
+        upgradeRequired: true,
+      });
     }
 
     const customerImageBlock = image
@@ -147,12 +160,18 @@ router.post('/analyze', upload.single('image'), async (req, res) => {
       .join('\n');
 
     const result = parseAnalysisResponse(rawText);
+
+    // Only record the scan now that analysis actually succeeded — a failed
+    // request (see catch block below) should not consume the user's quota.
+    recordScan(req.user, { isOverage: allowance.isOverage });
+
     res.json({
       ...result,
       brandGuess,
       productGuess,
       referencesUsed: referenceImageBlocks.length,
       referenceSource: referenceSourceLabel,
+      usage: { isOverage: allowance.isOverage },
     });
   } catch (err) {
     console.error('Analysis error:', err);

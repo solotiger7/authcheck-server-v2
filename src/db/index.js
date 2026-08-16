@@ -42,4 +42,29 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_products_brand ON reference_products(brand_id);
   CREATE INDEX IF NOT EXISTS idx_images_product ON reference_images(product_id);
+
+  -- One row per app user/customer. api_key is what the mobile app sends
+  -- to identify itself (issued when a user signs up / subscribes).
+  CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    api_key TEXT NOT NULL UNIQUE,
+    email TEXT,
+    plan TEXT NOT NULL DEFAULT 'free',
+    -- 'free' | 'basic' | 'pro' | 'enterprise'
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
+  -- One row per user per calendar month, tracking scan counts and
+  -- whether each scan was inside the plan's included quota or overage.
+  CREATE TABLE IF NOT EXISTS usage_periods (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    period_key TEXT NOT NULL,
+    -- e.g. '2026-08' — the billing month this row covers
+    included_scans_used INTEGER NOT NULL DEFAULT 0,
+    overage_scans_used INTEGER NOT NULL DEFAULT 0,
+    UNIQUE(user_id, period_key)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_usage_user_period ON usage_periods(user_id, period_key);
 `);

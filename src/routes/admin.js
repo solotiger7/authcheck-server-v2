@@ -7,6 +7,8 @@ import {
   listBrands,
   listProductsForBrand,
 } from '../services/referenceStore.js';
+import { findUserByApiKey, setUserPlan, getUsageSummary } from '../services/usageTracking.js';
+import { PLANS } from '../plans.js';
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -68,6 +70,34 @@ router.post('/admin/reference-images', upload.single('image'), (req, res) => {
     source,
   });
   res.status(201).json(image);
+});
+
+// Manually change a user's plan (temporary override until Chargily webhooks
+// automate this on successful subscription payment).
+// Body: { apiKey, plan } where plan is one of: free, basic, pro, enterprise
+router.post('/admin/users/plan', express.json(), (req, res) => {
+  const { apiKey, plan } = req.body;
+  if (!apiKey || !plan) {
+    return res.status(400).json({ error: 'apiKey and plan are required.' });
+  }
+  if (!PLANS[plan]) {
+    return res.status(400).json({ error: `Unknown plan "${plan}".` });
+  }
+  const user = findUserByApiKey(apiKey);
+  if (!user) {
+    return res.status(404).json({ error: 'No user found for that apiKey.' });
+  }
+  setUserPlan(user.id, plan);
+  res.json({ apiKey, plan });
+});
+
+// View a user's current usage (handy for support / debugging).
+router.get('/admin/users/:apiKey/usage', (req, res) => {
+  const user = findUserByApiKey(req.params.apiKey);
+  if (!user) {
+    return res.status(404).json({ error: 'No user found for that apiKey.' });
+  }
+  res.json(getUsageSummary(user));
 });
 
 export default router;

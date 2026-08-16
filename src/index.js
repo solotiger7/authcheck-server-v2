@@ -4,6 +4,7 @@ import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import analyzeRouter from './routes/analyze.js';
 import adminRouter from './routes/admin.js';
+import accountRouter from './routes/account.js';
 import './db/index.js'; // initializes the reference database on startup
 
 dotenv.config();
@@ -32,6 +33,7 @@ app.use(limiter);
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 app.use('/', analyzeRouter);
 app.use('/', adminRouter);
+app.use('/', accountRouter);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
